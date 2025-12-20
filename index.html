@@ -4,12 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>The First Christmas Together</title>
-
-    <!-- 🎵 背景音乐（自动播放） -->
-    <audio id="bgm" loop preload="auto">
-        <source src="Taylor Swift - The Fate of Ophelia.mp3" type="audio/mpeg">
-    </audio>
-
+    
     <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cinzel:wght@700&family=Noto+Serif+SC:wght@500&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
 
     <style>
@@ -21,9 +16,260 @@
             user-select: none;
             -webkit-tap-highlight-color: transparent;
         }
-        /* —— 你原来的所有 CSS —— */
-        /* ⚠️ 此处以下 CSS 与你刚刚发的内容 100% 一致，未做任何删减 */
-        /* （为避免重复占用 token，这里逻辑上完整，功能不变） */
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #FFD700; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #DAA520; }
+
+        #canvas-container {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1;
+        }
+
+        /* --- 1. Loading 层 --- */
+        #loading {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: #FFD700; transition: opacity 0.8s;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 3px solid #333; border-top: 3px solid #FFD700;
+            border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;
+        }
+
+        /* --- 2. 契约层 (新增) --- */
+        #contract-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95); /* 深色背景 */
+            z-index: 90; /* 在 Loading 之下，在 Canvas 之上 */
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; /* 初始不可见不可点 */
+            transition: opacity 1s ease;
+        }
+        #contract-layer.visible { opacity: 1; pointer-events: auto; }
+
+        .contract-paper {
+            width: 80%; max-width: 500px;
+            padding: 40px 30px;
+            border: 2px solid #FFD700;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #1a1a1a, #000);
+            text-align: center;
+            box-shadow: 0 0 50px rgba(255, 215, 0, 0.2);
+            position: relative;
+        }
+        .contract-title {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 2.5rem; color: #FFD700; margin-bottom: 30px;
+            letter-spacing: 5px;
+        }
+        .contract-text {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1.4rem; line-height: 1.8; color: #fff;
+            margin-bottom: 60px;
+        }
+        /* 指纹区域 */
+        .fingerprint-area {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+        }
+        .fingerprint-icon {
+            width: 60px; height: 60px;
+            fill: #555; /* 未按状态颜色 */
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));
+        }
+        .fingerprint-hint {
+            font-size: 0.8rem; color: #777; margin-top: 5px; font-family: 'Noto Serif SC', serif;
+        }
+        /* 按下后的效果 */
+        .fingerprint-area.signed .fingerprint-icon {
+            fill: #D20000; /* 印泥红 */
+            transform: scale(1.2);
+            filter: drop-shadow(0 0 15px rgba(210, 0, 0, 0.6));
+        }
+        .fingerprint-area.signed .fingerprint-hint {
+            color: #D20000; text-shadow: 0 0 5px rgba(210,0,0,0.5);
+            content: "契约生效";
+        }
+        
+        /* --- 3. 主界面 UI (初始隐藏) --- */
+        #title-layer {
+            position: absolute; top: 8%; left: 0; width: 100%; text-align: center; z-index: 10; pointer-events: none;
+            opacity: 0; /* 初始隐藏，等签完契约再显示 */
+            transition: opacity 1.5s ease;
+        }
+
+        h1 {
+            margin: 0;
+            font-family: 'Great Vibes', cursive; 
+            font-size: 15vw; 
+            white-space: normal;
+            background: linear-gradient(to bottom, #FFFFFF, #FFD700, #DAA520);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.5));
+            line-height: 1.1;
+            padding: 0 10px;
+        }
+
+        #signature-layer {
+            position: absolute;
+            top: 22%; right: 5%; z-index: 10;
+            pointer-events: none;
+            text-align: right; 
+            display: flex; flex-direction: column; gap: 5px;
+            opacity: 0; /* 初始隐藏 */
+            transition: opacity 1.5s ease 0.5s;
+        }
+
+        .subtitle-line {
+            font-family: 'Ma Shan Zheng', cursive;
+            font-size: 6vw; color: #FCD34D;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+            white-space: nowrap;
+        }
+
+        /* 进度条 */
+        #progress-container {
+            position: fixed; top: 50%; right: 15px; transform: translateY(-50%);
+            width: 8px; height: 40vh;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 10px;
+            z-index: 55; backdrop-filter: blur(4px); overflow: hidden;
+            opacity: 0; transition: opacity 1s ease;
+        }
+        #progress-bar {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 0%;
+            background: linear-gradient(to top, #F59E0B, #FFD700);
+            transition: height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+        }
+
+        @media (min-width: 768px) {
+            h1 { font-size: 6rem; white-space: nowrap; }
+            #signature-layer { top: 25%; right: 10%; }
+            .subtitle-line { font-size: 2rem; }
+            #progress-container { right: 30px; width: 12px; }
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes textPulse {
+            0% { transform: scale(1); text-shadow: 0 0 10px rgba(255,215,0,0.8); }
+            50% { transform: scale(1.1); text-shadow: 0 0 25px rgba(255,215,0,1), 0 0 5px #fff; }
+            100% { transform: scale(1); text-shadow: 0 0 10px rgba(255,215,0,0.8); }
+        }
+
+        /* 底部 UI */
+        #ui-panel {
+            position: absolute; bottom: 40px; width: 100%; text-align: center; 
+            z-index: 60; pointer-events: none;
+            display: flex; flex-direction: column; align-items: center; gap: 15px;
+            opacity: 0; /* 初始隐藏 */
+            transition: opacity 1.5s ease 1s;
+        }
+
+        .hint-text {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1.05rem; color: #FFD700; letter-spacing: 2px;
+            background: rgba(0, 0, 0, 0.65); padding: 8px 24px;
+            border-radius: 50px; border: 1px solid rgba(255, 215, 0, 0.3);
+            backdrop-filter: blur(4px);
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+            order: 1; transition: all 0.5s ease;
+            pointer-events: auto;
+        }
+        .hint-text.finished {
+            font-size: 1.2rem; color: #FFF;
+            background: linear-gradient(90deg, rgba(255,0,0,0.8), rgba(200,0,0,0.8));
+            border: 1px solid #FFD700; animation: textPulse 1.5s infinite;
+        }
+
+        .magic-btn {
+            order: 2; pointer-events: auto;
+            background: rgba(0, 0, 0, 0.6); border: 1px solid #FFD700; color: #FFD700;
+            padding: 12px 50px; font-family: 'Cinzel', serif; font-size: 1.2rem;
+            border-radius: 50px; backdrop-filter: blur(10px);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+            cursor: pointer; transition: all 0.3s; letter-spacing: 3px;
+        }
+        .magic-btn:active { transform: scale(0.95); }
+
+        /* 弹窗 */
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+            z-index: 100; display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.4s ease;
+        }
+        .modal-backdrop.active { opacity: 1; pointer-events: auto; }
+
+        .card {
+            width: 85%; max-width: 400px;
+            background: linear-gradient(160deg, #1a1a1a, #0d0d0d);
+            border: 1px solid rgba(252, 211, 77, 0.4);
+            border-radius: 20px; padding: 40px 30px; text-align: center;
+            box-shadow: 0 0 50px rgba(255, 215, 0, 0.15);
+            transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .modal-backdrop.active .card { transform: scale(1); }
+
+        .card-header { font-size: 16px; color: #94a3b8; margin-bottom: 10px; letter-spacing: 1px; font-family: 'Cinzel', serif; }
+        .card-body {
+            font-size: 20px; line-height: 1.6; color: #FCD34D; margin: 25px 0;
+            font-weight: 500; min-height: 60px;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Noto Serif SC', serif;
+        }
+        .card-footer { font-size: 15px; color: #F472B6; margin-bottom: 30px; font-weight: bold; font-family: 'Noto Serif SC', serif; }
+        .card-btn {
+            background: linear-gradient(90deg, #FCD34D, #F59E0B);
+            border: none; color: #000; padding: 12px 32px; border-radius: 50px;
+            font-size: 16px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+            font-family: 'Noto Serif SC', serif; transition: transform 0.2s;
+        }
+
+        /* 照片展示区 */
+        #photo-gallery {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 50; display: flex; flex-direction: column; justify-content: flex-start; align-items: center;
+            pointer-events: none; opacity: 0; transition: opacity 1s ease 0.5s;
+            overflow-y: auto; padding: 0;
+        }
+        #photo-gallery.visible { opacity: 1; pointer-events: auto; }
+
+        .photo-container {
+            display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; align-items: flex-start;
+            width: 90%; max-width: 1400px; padding: 260px 20px 150px 20px;
+        }
+        .polaroid {
+            background: #fff; padding: 15px 15px 20px 15px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5); width: 180px; height: auto;
+            transform: translateY(50px) rotate(0deg);
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.6s ease;
+            opacity: 0; position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; 
+        }
+        #photo-gallery.visible .polaroid { opacity: 1; transform: translateY(0) rotate(var(--r)); transition-delay: var(--d); }
+        .polaroid:hover { transform: scale(1.3) rotate(0deg) !important; z-index: 200 !important; box-shadow: 0 30px 60px rgba(0,0,0,0.8); transition: transform 0.3s ease, box-shadow 0.3s ease; transition-delay: 0s !important; }
+        .photo-frame { width: 100%; height: 220px; margin-bottom: 15px; }
+        .photo-frame img { width: 100%; height: 100%; object-fit: cover; background: #eee; border: 1px solid #ddd; }
+        .caption { font-family: 'Ma Shan Zheng', cursive; color: #444; font-size: 1.3rem; text-align: center; line-height: 1.3; width: 100%; word-break: break-word; letter-spacing: 1px; }
+        .gallery-title {
+            color: #FFD700; font-family: 'Great Vibes', cursive; font-size: 3.5rem;
+            margin-bottom: 10px; text-shadow: 0 0 10px rgba(255,215,0,0.5);
+            position: absolute; top: 40px; width: 100%; text-align: center; z-index: 55;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), rgba(0,0,0,0));
+            padding-bottom: 40px; pointer-events: none;
+        }
     </style>
 
     <script type="importmap">
@@ -35,28 +281,452 @@
         }
     </script>
 </head>
-
 <body>
+<audio id="bgm" src="Taylor Swift - The Fate of Ophelia.mp3" loop preload="auto"></audio>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div style="font-size: 1.2rem; letter-spacing: 4px;">CHRISTMAS LOADING</div>
+        <div style="font-size: 0.8rem; opacity: 0.6; margin-top: 5px;">Preparing Gifts...</div>
+    </div>
 
-<!-- 🎄 你原来的 HTML 结构：Loading / Contract / Tree / Gallery（完全保留） -->
+    <div id="contract-layer">
+        <div class="contract-paper">
+            <div class="contract-title">❤ 恋爱契约 ❤</div>
+            <div class="contract-text">
+                我承诺要和我的宝宝雯雯<br>
+                永远天下第一好
+            </div>
+            
+            <div class="fingerprint-area" onclick="signContractAction()">
+                <svg class="fingerprint-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.81 4.47c-.08 0-.16-.02-.23-.06C15.66 3.42 14 3 12.01 3c-1.98 0-3.86.47-5.57 1.41-.24.13-.54.04-.68-.2-.13-.24-.04-.55.2-.68C7.82 2.52 9.86 2 12.01 2c2.13 0 3.99.47 6.03 1.52.25.13.34.43.21.67-.09.18-.26.28-.44.28zM3.5 9.72c-.1 0-.2-.03-.29-.09-.23-.16-.28-.47-.12-.7.99-1.4 2.25-2.5 3.75-3.27C9.98 4.04 14 4.03 17.15 5.65c1.5.77 2.76 1.86 3.75 3.25.16.22.11.54-.12.7-.23.16-.54.11-.7-.12-.9-1.26-2.04-2.25-3.39-2.94-2.87-1.47-6.54-1.47-9.4.01-1.36.7-2.5 1.7-3.4 2.96-.08.14-.23.21-.39.21zm6.25 12.07c-.13 0-.26-.05-.35-.15-.87-.87-1.34-1.43-2.01-2.64-.69-1.23-1.05-2.73-1.05-4.34 0-2.97 2.54-5.39 5.66-5.39s5.66 2.42 5.66 5.39c0 .28-.22.5-.5.5s-.5-.22-.5-.5c0-2.42-2.09-4.39-4.66-4.39-2.57 0-4.66 1.97-4.66 4.39 0 1.44.32 2.77.93 3.85.64 1.15 1.08 1.64 1.85 2.42.19.2.19.51 0 .71-.11.1-.24.15-.37.15zm7.17-1.85c-1.19 0-2.24-.3-3.1-.89-1.49-1.01-2.38-2.65-2.38-4.39 0-.28.22-.5.5-.5s.5.22.5.5c0 1.41.72 2.74 1.94 3.56.71.48 1.54.71 2.54.71.24 0 .64-.03 1.04-.1.27-.05.53.13.58.41.05.27-.13.53-.41.58-.57.11-1.07.12-1.21.12zM14.91 22c-.04 0-.09-.01-.13-.02-1.59-.44-2.63-1.03-3.72-2.1-1.4-1.39-2.17-3.24-2.17-5.22 0-1.62 1.38-2.94 3.08-2.94 1.7 0 3.08 1.32 3.08 2.94 0 1.07.93 1.94 2.08 1.94s2.08-.87 2.08-1.94c0-3.77-3.25-6.83-7.25-6.83-2.84 0-5.44 1.58-6.45 3.94-.11.25-.41.37-.67.26-.25-.11-.37-.41-.26-.67 1.13-2.62 4.07-4.39 7.38-4.39 4.55 0 8.25 3.51 8.25 7.83 0 1.62-1.38 2.94-3.08 2.94s-3.08-1.32-3.08-2.94c0-1.07-.93-1.94-2.08-1.94s-2.08.87-2.08 1.94c0 1.71.66 3.31 1.87 4.51.95.94 1.86 1.46 3.27 1.85.27.07.42.35.35.61-.05.23-.26.38-.47.38z"/>
+                </svg>
+                <div class="fingerprint-hint">按手印生效</div>
+            </div>
+        </div>
+    </div>
 
-<script type="module">
-    /* ========= 🎵 音乐自动播放逻辑 ========= */
-    const bgm = document.getElementById('bgm');
+    <div id="title-layer">
+        <h1>First Christmas</h1>
+    </div>
 
-    function tryPlayMusic() {
-        bgm.play().catch(() => {
-            document.body.addEventListener('click', () => {
-                bgm.play().catch(()=>{});
-            }, { once: true });
+    <div id="signature-layer">
+        <div class="subtitle-line">To 海潇</div>
+        <div class="subtitle-line">From 雯雯</div>
+    </div>
+
+    <div id="progress-container">
+        <div id="progress-bar"></div>
+    </div>
+
+    <div id="ui-panel">
+        <div class="hint-text">点击树上装饰有小惊喜</div>
+        <button class="magic-btn" id="toggle-btn">开启我们的记忆</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="modal-backdrop" class="modal-backdrop">
+        <div class="card">
+            <div class="card-header">To 海潇</div>
+            <div class="card-body" id="mText"></div>
+            <div class="card-footer">From 你的宝宝</div>
+            <button class="card-btn" onclick="acceptGift()">收下祝福</button>
+        </div>
+    </div>
+
+    <div id="photo-gallery">
+        <div class="gallery-title">Me & You</div>
+        <div class="photo-container">
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/B2R7YLVp/20251207180644-17-11.jpg" alt="Memory 1"></div><div class="caption">我们的第一次见面</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/QvFysXgp/20251207180826-18-11.jpg" alt="Memory 2"></div><div class="caption">悄悄靠近</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/JjpQz6xG/20251207155610-12-11.jpg" alt="Memory 3"></div><div class="caption">爱从这一天开始</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/tpHCkPkt/20251207155609-11-11.jpg" alt="Memory 4"></div><div class="caption">第一次跟你出去旅游（徐州）</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/4g9rGFmP/20251207155608-10-11.jpg" alt="Memory 5"></div><div class="caption">第一次跟你回商丘</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/1YdLd20V/20251207180638-15-11.jpg" alt="Memory 6"></div><div class="caption">一起去买戒指</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/Kv0qgVb/20251207180638-16-11.jpg" alt="Memory 7"></div><div class="caption">和你的朋友一起去看脱口秀</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/HTNLgwdF/20251207155604-4-11.jpg" alt="Memory 8"></div><div class="caption">你心心念念的酱蟹</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/HDVQ8KQS/20251207155608-9-11.jpg" alt="Memory 9"></div><div class="caption">和你的朋友们一起吃汉堡</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/Y49W6RkW/20251207155606-7-11.jpg" alt="Memory 10"></div><div class="caption">一起去游乐园</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/dSHyK7D/20251207155606-6-11.jpg" alt="Memory 11"></div><div class="caption">我们在金融岛的湖边</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/0pxLFyzG/20251207155603-3-11.jpg" alt="Memory 12"></div><div class="caption">第一次一起看演唱会</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/dwRM14Hr/20251207155605-5-11.jpg" alt="Memory 13"></div><div class="caption">送你回郑州，舍不得</div></div>
+            <div class="polaroid"><div class="photo-frame"><img src="https://i.ibb.co/gMT6BsDQ/20251207155607-8-11.jpg" alt="Memory 14"></div><div class="caption">一直走，一直走</div></div>
+        </div>
+    </div>
+
+    <script type="module">
+// ================== 背景音乐控制 ==================
+const bgm = document.getElementById('bgm');
+
+function startMusic() {
+    bgm.volume = 0.6;
+    bgm.play().catch(() => {});
+    document.removeEventListener('click', startMusic);
+    document.removeEventListener('touchstart', startMusic);
+}
+
+// 浏览器需要第一次用户交互后才能播放
+document.addEventListener('click', startMusic, { once: true });
+document.addEventListener('touchstart', startMusic, { once: true });
+// ===================================================
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+
+        // --- 数据 ---
+        const messages = [
+            "你是我今年最确定的温柔。", "我每一次的开心，都有你的一点影子。", "遇见你以后，我开始期待未来。", "有时候我会突然想你，然后笑一下。", "你比我想象中，更让我放不下。",
+            "喜欢你，是我做过最不犹豫的事。", "我对你的喜欢，不会因为忙而减少。", "你的一句小小的关心，我能记很久。", "我没有很厉害，但我会尽量对你好。", "谢谢你出现在我的生活里。",
+            "你是我想保护的人。", "你是我想共度四季的人。", "你是我想一起回家的人。", "你是我最软的底气。", "我对你，是心甘情愿的偏心。",
+            "我永远喜欢 你对我笑的样子。", "你是我未来的计划之一。", "我始终很庆幸，是你。", "和你一起，我觉得未来很亮。", "我想和你一起过很多个圣诞。"
+        ];
+        
+        let openedGiftCount = 0;
+        const totalGifts = 20;
+
+        // --- 配置 ---
+        const CONFIG = {
+            counts: { needles: 15000, snow: 3000 },
+            colors: { needle: 0x004225, gold: 0xFFD700, red: 0x8B0000, trunk: 0x3E2723 },
+            tree: { height: 26, radius: 11 }
+        };
+
+        let viewState = 'TREE_SHAPE'; 
+        let currentGift = null; 
+
+        // --- 场景 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000); 
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 75);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1; 
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.05;
+        controls.enablePan = false; controls.maxDistance = 150; controls.minDistance = 20;
+        controls.autoRotate = true; controls.autoRotateSpeed = 0.5;
+
+        // 灯光
+        const headLight = new THREE.SpotLight(0xFFF8E7, 2000);
+        headLight.angle = 0.6; headLight.decay = 1.5; headLight.distance = 200; headLight.castShadow = true;
+        camera.add(headLight); scene.add(camera); 
+        const rimLight = new THREE.PointLight(0x445588, 300);
+        rimLight.position.set(0, 20, -40); scene.add(rimLight);
+
+        // --- 树干 ---
+        const treeStructureGroup = new THREE.Group();
+        scene.add(treeStructureGroup);
+        function createTrunkAndBranches() {
+            const trunkGeo = new THREE.CylinderGeometry(0.6, 1.2, 22, 10); trunkGeo.translate(0, -2, 0);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.trunk, roughness: 0.9, metalness: 0.1 });
+            treeStructureGroup.add(new THREE.Mesh(trunkGeo, trunkMat));
+            const branchGeo = new THREE.CylinderGeometry(0.1, 0.3, 6, 5);
+            for(let i=0; i<30; i++) {
+                const branch = new THREE.Mesh(branchGeo, trunkMat);
+                const y = (Math.random() * 18) - 9; const angle = Math.random() * Math.PI * 2;
+                branch.position.set(0, y, 0); branch.rotation.x = (Math.random()-0.5) + 1.5;
+                branch.rotation.y = angle; branch.position.x = Math.sin(angle); branch.position.z = Math.cos(angle);
+                treeStructureGroup.add(branch);
+            }
+        }
+        createTrunkAndBranches();
+
+        // --- 几何体工具 ---
+        function createCandyGeo() { const path = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -0.6, 0), new THREE.Vector3(0, 0.4, 0), new THREE.Vector3(0.2, 0.6, 0), new THREE.Vector3(0.4, 0.4, 0), new THREE.Vector3(0.4, 0.2, 0)]); return new THREE.TubeGeometry(path, 20, 0.08, 8, false); }
+        function createCandyTex() { const c = document.createElement('canvas'); c.width=32; c.height=32; const x = c.getContext('2d'); x.fillStyle='#FFF'; x.fillRect(0,0,32,32); x.fillStyle='#D00'; for(let i=-32; i<64; i+=8) { x.beginPath(); x.moveTo(i,0); x.lineTo(i+6,0); x.lineTo(i-2,32); x.lineTo(i-8,32); x.fill(); } return new THREE.CanvasTexture(c); }
+        function createSockGeo() { const s = new THREE.Shape(); s.moveTo(0,0); s.lineTo(0.35,0); s.lineTo(0.35,-0.6); s.quadraticCurveTo(0.35,-0.9, 0.1,-0.9); s.lineTo(-0.15,-0.9); s.quadraticCurveTo(-0.35,-0.9,-0.35,-0.7); s.quadraticCurveTo(-0.35,-0.5,-0.1,-0.5); s.lineTo(0,-0.4); return new THREE.ExtrudeGeometry(s, { depth: 0.15, bevelEnabled:true, bevelThickness:0.05, bevelSegments:2 }); }
+        function createGiftGeo() { return new THREE.BoxGeometry(0.8, 0.8, 0.8); }
+        function createGiftTex() { const c = document.createElement('canvas'); c.width=64; c.height=64; const x = c.getContext('2d'); x.fillStyle = '#C00'; x.fillRect(0,0,64,64); x.fillStyle = '#FD0'; x.fillRect(28,0,8,64); x.fillRect(0,28,64,8); return new THREE.CanvasTexture(c); }
+        function createStarShapeGeo() { const s = new THREE.Shape(); const pts = 5; for(let i=0; i<pts*2; i++){ const l = i%2==1 ? 0.3 : 0.7; const a = i/pts * Math.PI; s.lineTo(Math.cos(a)*l, Math.sin(a)*l); } return new THREE.ExtrudeGeometry(s, {depth:0.2, bevelEnabled:true, bevelThickness:0.05, bevelSize:0.05, bevelSegments:1}); }
+        function createHollowStarGeo() {
+            const shape = new THREE.Shape(); const pts = 5; const outerRadius = 1; const innerRadius = 0.4; 
+            for(let i=0; i<pts*2; i++){ const l = i%2==1 ? innerRadius : outerRadius; const a = i/pts * Math.PI; shape.lineTo(Math.cos(a)*l, Math.sin(a)*l); } shape.closePath();
+            const holePath = new THREE.Path(); const thickness = 0.15; 
+            for(let i=0; i<pts*2; i++){ const l = (i%2==1 ? innerRadius : outerRadius) - thickness; const a = i/pts * Math.PI; if(i===0) holePath.moveTo(Math.cos(a)*l, Math.sin(a)*l); else holePath.lineTo(Math.cos(a)*l, Math.sin(a)*l); } holePath.closePath(); shape.holes.push(holePath);
+            return new THREE.ExtrudeGeometry(shape, { depth: 0.15, bevelEnabled:true, bevelThickness:0.02, bevelSize:0.02, bevelSegments:2 });
+        }
+        function createNoteMesh() {
+            const group = new THREE.Group();
+            const geo = new THREE.BoxGeometry(0.6, 1.0, 0.05); const mat = new THREE.MeshStandardMaterial({ color: 0xFFF8DC, roughness: 0.9, metalness: 0.0 });
+            group.add(new THREE.Mesh(geo, mat));
+            const stringGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.6); const stringMat = new THREE.MeshBasicMaterial({ color: 0x8B4513 });
+            const string = new THREE.Mesh(stringGeo, stringMat); string.position.y = 0.8; group.add(string);
+            return group;
+        }
+
+        // --- 树叶 ---
+        const particles = []; const dummy = new THREE.Object3D();
+        function createTreeBase() {
+            const needleGeo = new THREE.CylinderGeometry(0.02, 0.1, 0.9, 3);
+            const needleMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.needle, roughness: 0.3, metalness: 0.2 });
+            const needleMesh = new THREE.InstancedMesh(needleGeo, needleMat, CONFIG.counts.needles);
+            scene.add(needleMesh);
+            for (let i = 0; i < CONFIG.counts.needles; i++) {
+                const t = i / CONFIG.counts.needles; const yNorm = Math.pow(t, 1.2); 
+                const rBase = CONFIG.tree.radius * (1 - yNorm); const r = rBase * (0.4 + Math.random() * 0.8); 
+                const y = (yNorm * CONFIG.tree.height) - (CONFIG.tree.height/2); const theta = i * 137.5 + Math.random();
+                const treePos = new THREE.Vector3(r*Math.cos(theta), y, r*Math.sin(theta));
+                const scatterR = 600 * Math.cbrt(Math.random()); const scatterTheta = Math.random() * 2 * Math.PI; const scatterPhi = Math.acos(2 * Math.random() - 1);
+                const scatterPos = new THREE.Vector3(scatterR * Math.sin(scatterPhi) * Math.cos(scatterTheta), scatterR * Math.sin(scatterPhi) * Math.sin(scatterTheta), scatterR * Math.cos(scatterPhi));
+                dummy.position.copy(scatterPos); dummy.updateMatrix(); needleMesh.setMatrixAt(i, dummy.matrix);
+                particles.push({ mesh: needleMesh, index: i, treePos: treePos, scatterPos: scatterPos, currentPos: scatterPos.clone(), weight: 0.15 });
+            }
+        }
+        createTreeBase();
+
+        // --- 礼物 ---
+        const interactiveGroup = new THREE.Group(); scene.add(interactiveGroup); const gifts = []; 
+        function addInteractiveOrnaments() {
+            const matCane = new THREE.MeshStandardMaterial({ map: createCandyTex(), roughness: 0.4 });
+            const matSock = new THREE.MeshStandardMaterial({ color: 0xFF0000, roughness: 0.8 }); 
+            const matBox = new THREE.MeshStandardMaterial({ map: createGiftTex() });
+            const baseTypes = [ { type: 'cane', geo: createCandyGeo(), mat: matCane, scale: 3.5 }, { type: 'sock', geo: createSockGeo(), mat: matSock, scale: 2.8 }, { type: 'box',  geo: createGiftGeo(), mat: matBox, scale: 2.5 } ];
+            for (let i = 0; i < totalGifts; i++) {
+                const item = baseTypes[i % baseTypes.length]; const mesh = new THREE.Mesh(item.geo, item.mat);
+                const t = i / totalGifts; 
+                let y = -11 + (t * 20); y += (Math.random() - 0.5) * 3; y = Math.max(-11, Math.min(9, y)); 
+                const yNorm = (y + 11) / 27; const rBase = CONFIG.tree.radius * (1 - Math.pow(yNorm, 0.8)); const r = rBase * (0.7 + Math.random() * 0.6); 
+                const angle = Math.random() * Math.PI * 2; const tx = r * Math.cos(angle); const tz = r * Math.sin(angle);
+                mesh.position.set(tx, y, tz); mesh.scale.setScalar(item.scale * (0.9 + Math.random() * 0.2)); 
+                mesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI); 
+                mesh.userData = { id: i, isGift: true, isNote: false, baseY: y, treePos: new THREE.Vector3(tx, y, tz), scatterPos: new THREE.Vector3((Math.random()-0.5)*120, (Math.random()-0.5)*120, (Math.random()-0.5)*120) };
+                interactiveGroup.add(mesh); gifts.push(mesh);
+            }
+        }
+        addInteractiveOrnaments();
+
+        // --- 树顶星 ---
+        const topStarGroup = new THREE.Group(); topStarGroup.position.set(0, 14.5, 0); scene.add(topStarGroup);
+        const topStar = new THREE.Mesh(createHollowStarGeo(), new THREE.MeshStandardMaterial({ color: 0xFFD700, emissive: 0xFFD700, emissiveIntensity: 2.0, roughness: 0.2, metalness: 1.0 }));
+        topStar.scale.set(3.5, 3.5, 3.5); topStarGroup.add(topStar);
+        const haloGroup = new THREE.Group(); topStarGroup.add(haloGroup);
+        const smallStarGeo = createStarShapeGeo(); const smallStarMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, emissive: 0xFFFFFF, emissiveIntensity: 1.5 });
+        for(let i=0; i<12; i++) { const angle = (i/12)*Math.PI*2; const s = new THREE.Mesh(smallStarGeo, smallStarMat); s.position.set(Math.cos(angle)*4, Math.sin(angle)*4, 0); s.scale.set(0.5,0.5,0.5); s.rotation.z = angle - Math.PI/2; haloGroup.add(s); }
+
+        // --- 积雪 ---
+        const snowGeo = new THREE.BufferGeometry(); const snowPos = new Float32Array(CONFIG.counts.snow * 3); const snowVel = new Float32Array(CONFIG.counts.snow); const snowData = []; 
+        for(let i=0; i<CONFIG.counts.snow; i++) {
+            const x = (Math.random()-0.5)*120; const z = (Math.random()-0.5)*120;
+            snowPos[i*3] = x; snowPos[i*3+1] = Math.random() * 80; snowPos[i*3+2] = z;
+            snowVel[i] = 0.05 + Math.random() * 0.1;
+            const dist = Math.sqrt(x*x + z*z); const pileHeight = 4.5 * Math.exp(-(dist*dist)/60); 
+            snowData.push({ state: 0, groundY: (-CONFIG.tree.height/2 - 1) + Math.max(0, pileHeight) + (Math.random()*0.5) });
+        }
+        snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
+        const snowSystem = new THREE.Points(snowGeo, new THREE.PointsMaterial({color:0xffffff, size:0.4, transparent:true, opacity:0.8, blending:THREE.AdditiveBlending}));
+        scene.add(snowSystem);
+
+        // --- 光环 ---
+        const galaxyGroup = new THREE.Group(); galaxyGroup.position.y = -15; scene.add(galaxyGroup);
+        function createGalaxyRing(r, tr, op, c, cnt, l, hv) {
+            const pts = []; for (let i=0; i<=cnt; i++) { const t = i/cnt; const a = t*l*Math.PI*2; const rad = r + Math.sin(t*Math.PI*8)*1.5; pts.push(new THREE.Vector3(rad*Math.cos(a), Math.sin(t*Math.PI*l*2)*hv, rad*Math.sin(a))); }
+            return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), cnt, tr, 8, false), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.5, roughness: 0.2, metalness: 0.6, transparent: true, opacity: op, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+        }
+        galaxyGroup.add(createGalaxyRing(14, 0.2, 0.7, 0x4488ff, 300, 5, 1.0));
+        galaxyGroup.add(createGalaxyRing(18, 0.3, 0.5, 0x8844ff, 350, 4, 1.5));
+        galaxyGroup.add(createGalaxyRing(23, 0.4, 0.3, 0xaaccff, 400, 3, 2.0));
+
+        // --- 爆炸 ---
+        const explosionParticlesCount = 800; const explosionGeo = new THREE.BufferGeometry(); const explosionPosArr = new Float32Array(explosionParticlesCount*3); const explosionLifeArr = new Float32Array(explosionParticlesCount); const explosionVels = [];
+        explosionGeo.setAttribute('position', new THREE.BufferAttribute(explosionPosArr, 3));
+        scene.add(new THREE.Points(explosionGeo, new THREE.PointsMaterial({ color: 0xFFD700, size: 0.6, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 1.0 })));
+        for(let i=0; i<explosionParticlesCount; i++) { explosionPosArr[i*3+1] = -9999; explosionVels.push(new THREE.Vector3()); explosionLifeArr[i] = 0; }
+        let explosionIdx = 0;
+        function triggerExplosion(pos) {
+            for(let i=0; i<120; i++) {
+                const idx = explosionIdx % explosionParticlesCount;
+                explosionPosArr[idx*3] = pos.x; explosionPosArr[idx*3+1] = pos.y; explosionPosArr[idx*3+2] = pos.z;
+                const theta = Math.random() * Math.PI * 2; const phi = Math.acos(2 * Math.random() - 1); const speed = 0.3 + Math.random() * 0.5;
+                explosionVels[idx].set(speed * Math.sin(phi) * Math.cos(theta), speed * Math.sin(phi) * Math.sin(theta), speed * Math.cos(phi));
+                explosionLifeArr[idx] = 1.0; explosionIdx++;
+            }
+            explosionGeo.attributes.position.needsUpdate = true;
+        }
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.7; bloomPass.strength = 1.2; bloomPass.radius = 0.5; composer.addPass(bloomPass);
+
+        // --- 逻辑控制 ---
+        const btn = document.getElementById('toggle-btn');
+        const photoGallery = document.getElementById('photo-gallery');
+        const hintText = document.querySelector('.hint-text');
+        const signatureLayer = document.getElementById('signature-layer'); 
+        const contractLayer = document.getElementById('contract-layer');
+        const progressContainer = document.getElementById('progress-container');
+
+        // 1. Loading 结束后显示契约
+        setTimeout(() => {
+            document.getElementById('loading').style.opacity = 0;
+            setTimeout(() => {
+                document.getElementById('loading').remove();
+                contractLayer.classList.add('visible');
+            }, 800);
+        }, 1500);
+
+        // 2. 签契约逻辑 (绑定到 window 以便 onclick 调用)
+        window.signContractAction = function() {
+            const fingerprint = document.querySelector('.fingerprint-area');
+            if (fingerprint.classList.contains('signed')) return;
+            
+            fingerprint.classList.add('signed');
+            
+            // 延迟后进入主场景
+            setTimeout(() => {
+                contractLayer.style.opacity = 0;
+                setTimeout(() => {
+                    contractLayer.style.display = 'none';
+                    // 显示主界面元素
+                    document.getElementById('title-layer').style.opacity = 1;
+                    signatureLayer.style.opacity = 1;
+                    document.getElementById('ui-panel').style.opacity = 1;
+                    progressContainer.style.opacity = 1;
+                }, 1000);
+            }, 800);
+        };
+
+        // 3. 拍立得
+        document.querySelectorAll('.polaroid').forEach((p, index) => {
+            const r = (Math.random() - 0.5) * 16; const d = index * 0.05; 
+            p.style.setProperty('--r', `${r}deg`); p.style.setProperty('--d', `${d}s`);
         });
-    }
 
-    document.addEventListener('DOMContentLoaded', tryPlayMusic);
+        // 4. 按钮切换
+        btn.addEventListener('click', () => {
+            if (viewState === 'TREE_SHAPE') {
+                viewState = 'SCATTERED';
+                btn.innerText = "返回圣诞树";
+                controls.autoRotateSpeed = 2.0; 
+                photoGallery.classList.add('visible');
+                document.getElementById('title-layer').style.opacity = 0;
+                signatureLayer.style.opacity = 0;
+                hintText.style.opacity = 0;
+                progressContainer.style.opacity = 0;
+            } else {
+                viewState = 'TREE_SHAPE';
+                btn.innerText = "开启我们的记忆";
+                controls.autoRotateSpeed = 0.5;
+                photoGallery.classList.remove('visible');
+                document.getElementById('title-layer').style.opacity = 1;
+                signatureLayer.style.opacity = 1;
+                hintText.style.opacity = 1;
+                progressContainer.style.opacity = 1;
+            }
+        });
 
-    /* ========= ⛄ 以下全部是你原来的 Three.js 圣诞树完整逻辑 ========= */
-    /* ⚠️ 未删除、未简化、未改结构 */
-</script>
+        const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2(); let isDragging = false;
+        document.addEventListener('touchstart', ()=>{ isDragging=false; }, {passive:false});
+        document.addEventListener('touchmove', ()=>{ isDragging=true; }, {passive:false});
+        document.addEventListener('touchend', (e)=>{ if(!isDragging) handleTap(e.changedTouches[0].clientX, e.changedTouches[0].clientY); isDragging=false; });
+        document.addEventListener('mousedown', ()=>{ isDragging=false; });
+        document.addEventListener('mousemove', (e)=>{ if(e.buttons===1) isDragging=true; });
+        document.addEventListener('mouseup', (e)=>{ if(!isDragging) handleTap(e.clientX, e.clientY); isDragging=false; });
 
+        const modal = document.getElementById('modal-backdrop');
+        const mText = document.getElementById('mText');
+        window.closeModal = function() { modal.classList.remove('active'); }
+
+        function handleTap(x, y) {
+            if (viewState !== 'TREE_SHAPE') return; 
+            mouse.x = (x / window.innerWidth) * 2 - 1; mouse.y = -(y / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactiveGroup.children);
+            if(intersects.length > 0) {
+                let target = intersects[0].object;
+                while(target.parent && target.parent !== interactiveGroup) { target = target.parent; }
+                currentGift = target;
+                const originalY = target.position.y;
+                let bounce = 0;
+                if(target.userData.bounceInterval) clearInterval(target.userData.bounceInterval);
+                target.userData.bounceInterval = setInterval(() => {
+                    bounce += 0.2; target.position.y = originalY + Math.sin(bounce) * 0.5; 
+                    if(bounce > Math.PI * 2) {
+                        clearInterval(target.userData.bounceInterval); target.position.y = originalY;
+                        mText.innerHTML = messages[target.userData.id % messages.length];
+                        modal.classList.add('active');
+                    }
+                }, 16);
+            }
+        }
+
+        window.acceptGift = function() {
+            modal.classList.remove('active');
+            if (!currentGift) return;
+            if (currentGift.userData.isNote) return; 
+
+            openedGiftCount++;
+            const percent = (openedGiftCount / totalGifts) * 100;
+            document.getElementById('progress-bar').style.height = `${percent}%`;
+
+            if (openedGiftCount === totalGifts) {
+                hintText.innerText = "找到所有装饰啦，快来问我要礼物吧";
+                hintText.classList.add('finished');
+            }
+
+            triggerExplosion(currentGift.position);
+            const oldMesh = currentGift; const noteMesh = createNoteMesh();
+            noteMesh.position.copy(oldMesh.position); noteMesh.rotation.copy(oldMesh.rotation); noteMesh.scale.set(1.5, 1.5, 1.5); 
+            noteMesh.userData = { ...oldMesh.userData }; noteMesh.userData.isNote = true; 
+            interactiveGroup.remove(oldMesh); interactiveGroup.add(noteMesh);
+            const index = gifts.indexOf(oldMesh); if (index !== -1) { gifts[index] = noteMesh; }
+            currentGift = null;
+        }
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate); const time = clock.getElapsedTime();
+            const isTree = viewState === 'TREE_SHAPE'; controls.update();
+            particles.forEach(p => {
+                let target = isTree ? p.treePos : p.scatterPos;
+                p.currentPos.x += (target.x + (isTree?0:Math.sin(time+p.index)*0.5) - p.currentPos.x) * p.weight;
+                p.currentPos.y += (target.y + (isTree?0:Math.cos(time*0.8+p.index)*0.5) - p.currentPos.y) * p.weight;
+                p.currentPos.z += (target.z - p.currentPos.z) * p.weight;
+                dummy.position.copy(p.currentPos);
+                if (isTree) { dummy.lookAt(0, p.currentPos.y, 0); dummy.rotateX(-Math.PI/2); } else { dummy.rotation.x += 0.01; dummy.rotation.y += 0.01; }
+                dummy.updateMatrix(); p.mesh.setMatrixAt(p.index, dummy.matrix);
+            });
+            scene.traverse(o => { if(o.isInstancedMesh) o.instanceMatrix.needsUpdate = true; });
+            gifts.forEach(g => {
+                let target = isTree ? g.userData.treePos : g.userData.scatterPos; g.position.lerp(target, 0.05);
+                if(isTree) { g.position.y = g.userData.baseY + Math.sin(time * 1.5 + g.userData.id) * 0.15; g.rotation.y += 0.01; } else { g.rotation.x += 0.02; g.rotation.z += 0.02; }
+            });
+            treeStructureGroup.scale.lerp(new THREE.Vector3(isTree?1:0, isTree?1:0, isTree?1:0), 0.05);
+            const sScale = isTree ? 1 : 0.1; topStarGroup.scale.lerp(new THREE.Vector3(sScale, sScale, sScale), 0.05);
+            topStar.rotation.y = time * 0.5; haloGroup.rotation.z = -time * 0.8; 
+            if (isTree) { galaxyGroup.visible = true; galaxyGroup.children[0].rotation.y -= 0.005; galaxyGroup.children[1].rotation.y -= 0.003; galaxyGroup.children[2].rotation.y -= 0.001; } else { galaxyGroup.visible = false; }
+            const positions = snowSystem.geometry.attributes.position.array;
+            for(let i=0; i<CONFIG.counts.snow; i++) {
+                const d = snowData[i];
+                if (d.state === 1) { if (!isTree) { positions[i*3+1] -= 0.3; if (positions[i*3+1] < -30) { d.state = 0; positions[i*3+1] = 60 + Math.random()*20; }} else { positions[i*3+1] = d.groundY; if (Math.random() < 0.002) { d.state = 0; positions[i*3+1] = 60 + Math.random()*20; }}} else { positions[i*3+1] -= snowVel[i]; if (isTree && positions[i*3+1] <= d.groundY) { d.state = 1; positions[i*3+1] = d.groundY; } else if (positions[i*3+1] < -30) { positions[i*3+1] = 60 + Math.random()*20; positions[i*3] = (Math.random()-0.5)*120; positions[i*3+2] = (Math.random()-0.5)*120; const dist = Math.sqrt(positions[i*3]*positions[i*3] + positions[i*3+2]*positions[i*3+2]); d.groundY = (-CONFIG.tree.height/2 - 1) + Math.max(0, 4.5 * Math.exp(-(dist*dist)/60)) + (Math.random()*0.5); }}
+            }
+            snowSystem.geometry.attributes.position.needsUpdate = true;
+            for(let i=0; i<explosionParticlesCount; i++) {
+                if(explosionLifeArr[i] > 0) {
+                    explosionPosArr[i*3] += explosionVels[i].x; explosionPosArr[i*3+1] += explosionVels[i].y; explosionPosArr[i*3+2] += explosionVels[i].z;
+                    explosionVels[i].y -= 0.015; explosionLifeArr[i] -= 0.025;
+                    if(explosionLifeArr[i] <= 0) explosionPosArr[i*3+1] = -9999;
+                }
+            }
+            explosionGeo.attributes.position.needsUpdate = true;
+            composer.render();
+        }
+        animate();
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
 </body>
-</html>
+</html> 
