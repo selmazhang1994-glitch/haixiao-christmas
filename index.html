@@ -588,9 +588,21 @@ document.addEventListener('touchstart', startMusic, { once: true });
             setTimeout(() => {
                 contractLayer.style.opacity = 0;
                 setTimeout(() => {
-                    contractLayer.style.display = 'none';
-                    // 显示主界面元素
-                    document.getElementById('title-layer').style.opacity = 1;
+              contractLayer.style.display = 'none';
+                    // 🎵 签约完成后播放音乐（渐入）
+bgm.volume = 0;
+bgm.play().catch(()=>{});
+let v = 0;
+const fadeIn = setInterval(() => {
+    v += 0.02;
+    if (v >= 0.6) {
+        v = 0.6;
+        clearInterval(fadeIn);
+    }
+    bgm.volume = v;
+}, 100);
+
+document.getElementById('title-layer').style.opacity = 1;
                     signatureLayer.style.opacity = 1;
                     document.getElementById('ui-panel').style.opacity = 1;
                     progressContainer.style.opacity = 1;
